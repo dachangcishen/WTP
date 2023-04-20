@@ -11,10 +11,11 @@
 #include "crc32.h"
 
 static const int MAX_MESSAGE_SIZE = 100000;
+#define DATA_SIZE 1456
 
 typedef struct CHUNK {
 	struct PacketHeader header;
-	char content[1500];
+	char content[DATA_SIZE];
 } chunk;
 
 void logging(FILE* log, struct PacketHeader buffer)
@@ -143,7 +144,7 @@ int main(int argc, const char **argv) {
 	int len;  
   	memset(&addr_serv, 0, sizeof(struct sockaddr_in));  
   	addr.sin_family = AF_INET;  
-	addr->sin_addr.s_addr = htonl(INADDR_ANY);¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡¡ 
+	addr->sin_addr.s_addr = htonl(INADDR_ANY);ã€€ã€€ã€€ã€€ã€€ã€€ã€€ã€€ã€€ã€€ã€€ 
   	addr.sin_port = htons(port);
 
 
