@@ -6,23 +6,24 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 #define DATA_SIZE 1456
-#define MAX_START_ACK 2048
+
 
 struct packet {
-    unsigned int type;       // 0: START; 1: END; 2: DATA; 3: ACK
-    unsigned int seq_num;
-    unsigned int length;     // Length of data; 0 for ACK, START and END packets
-    unsigned int checksum;   // 32-bit CRC
+    int type;       // 0: START; 1: END; 2: DATA; 3: ACK
+    int seq_num;
+    int length;     // Length of data; 0 for ACK, START and END packets
+    int checksum;   // 32-bit CRC
     char data[DATA_SIZE];    // up to 1456B 
 };
 
 int create_packet(struct packet *p, int type, int seq_num, int length, int checksum, char *data) {
-    p->type = (unsigned int)type;
-    p->seq_num = (unsigned int)seq_num;
-    p->length = (unsigned int)length;
-    p->checksum = (unsigned int)checksum;
+    p->type = type;
+    p->seq_num = seq_num;
+    p->length = length;
+    p->checksum = checksum;
     memcpy(p->data, data, length);
     return length;
 }
@@ -77,9 +78,13 @@ int main(int argc, char *argv[]) {
         return 0;
     }
     
-    int seq_num = 0;
+    int seq_num = -1;
+    srand(time(NULL));
+    int ran_num = (rand() % 2048) + 1;
     int ack_num = 0;
     int start_ack = 0;
+    int end_ack = 0;
+    int send_ack = 0;
     char buffer[DATA_SIZE];
     int buffer_len = 0;
     int total_bytes_sent = 0;
@@ -92,18 +97,19 @@ int main(int argc, char *argv[]) {
         struct packet p;
         memset(&p, 0, sizeof(p));
 
-        if (seq_num == 0) {
+        if (seq_num == -1) {
             // Send start packet
-            create_packet(&p, 0, seq_num, strlen(filename) + 1, 0, filename);
+            create_packet(&p, 0, ran_num, strlen(filename) + 1, 0, filename);
             if (send_packet(sockfd, &p, &addr) < 0) {
                 perror("Error sending packet");
                 return 0;
             }
             printf("Sent start packet\n");
             start_ack = 0;
+            // Wait for ack
             attempts = 0;
             while (start_ack == 0 && attempts < max_attempts) {
-                if (recv_packet(sockfd, &p, &addr) >= 0 && p.type == 2 && p.seq_num == 0) {
+                if (recv_packet(sockfd, &p, &addr) >= 0 && p.type == 3 && p.seq_num == ran_num) {
                     printf("Received start ack\n");
                     start_ack = 1;
                 }
@@ -126,14 +132,34 @@ int main(int argc, char *argv[]) {
             buffer_len = fread(buffer, 1, DATA_SIZE, fp);
             if (buffer_len == 0) {
                 // End of file reached
-                create_packet(&p, 1, seq_num, 0, 0, "");
+                create_packet(&p, 1, ran_num, 0, 0, "");
                 if (send_packet(sockfd, &p, &addr) < 0) {
                     perror("Error sending packet");
                     return 0;
                 }
                 printf("Sent end packet\n");
                 done = 1;
-
+                
+                end_ack = 0;
+                attempts = 0;
+                while (end_ack == 0 && attempts < max_attempts) {
+                    if (recv_packet(sockfd, &p, &addr) >= 0 && p.type == 3 && p.seq_num == ran_num) {
+                        printf("Received ack %d\n", ran_num);
+                        end_ack = 1;
+                    }
+                    else {
+                        printf("Timeout waiting for ack %d\n", ran_num);
+                        if (send_packet(sockfd, &p, &addr) < 0) {
+                            perror("Error resending packet");
+                            return 0;
+                        }
+                        attempts++;
+                    }
+                }
+                if (end_ack == 0) {
+                    perror("Error sending end packet");
+                    return 0;
+                }
             }
             else {
                 create_packet(&p, 2, seq_num, buffer_len, 0, buffer);
@@ -145,11 +171,12 @@ int main(int argc, char *argv[]) {
                 total_bytes_sent += buffer_len;
                 total_packets_sent++;
 
-                
+                send_ack = 0;
                 attempts = 0;
-                while (ack_num < seq_num && attempts < max_attempts) {
+                while (send_ack == 0 && attempts < max_attempts) {
                     if (recv_packet(sockfd, &p, &addr) >= 0 && p.type == 3 && p.seq_num == ack_num) {
                         printf("Received ack %d\n", ack_num);
+                        send_ack = 1;
                         ack_num++;
                         total_packets_acked++;
                     }
@@ -162,7 +189,7 @@ int main(int argc, char *argv[]) {
                         attempts++;
                     }
                 }
-                if (ack_num < seq_num) {
+                if (send_ack == 0) {
                     perror("Error sending data packet");
                     return 0;
                 }
