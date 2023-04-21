@@ -89,16 +89,26 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize,c
 				logging(log, ack);
 				break;
 			}
-			if (buffer.header.type == 2 && buffer.header.seqNum < ack_seq + windowsize && buffer.header.seqNum >= ack_seq && buffer.header.checksum == crc32(buffer.data, buffer.header.length)) {
-				cou++;
-				logging(log, buffer.header);
-				fseek(fd_output, SEEK_END , SEEK_SET);
-				fwrite(buffer.data, 1, buffer.header.length, fd_output);
-				status = 1;
-				if (cou == windowsize) {
+			if (buffer.header.type == 2 && buffer.header.seqNum < ack_seq + windowsize && buffer.header.seqNum >= ack_seq ) {
+				if (buffer.header.checksum == crc32(buffer.data, buffer.header.length)) {
+					cou++;
+					logging(log, buffer.header);
+					fseek(fd_output, SEEK_END, SEEK_SET);
+					fwrite(buffer.data, 1, buffer.header.length, fd_output);
+					status = 1;
+					if (cou == windowsize) {
+						ack_seq += cou;
+						ack.type = 3;
+						ack.seqNum = buffer.header.seqNum + 1;
+						sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
+						logging(fd_log, ack);
+						cou = 0;
+					}
+				}
+				else {
 					ack_seq += cou;
 					ack.type = 3;
-					ack.seqNum = buffer.header.seqNum + 1;
+					ack.seqNum = buffer.header.seqNum;
 					sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
 					logging(fd_log, ack);
 					cou = 0;
