@@ -10,7 +10,6 @@
 #include "PacketHeader.h"
 #include "crc32.h"
 
-static const int MAX_MESSAGE_SIZE = 100000;
 #define DATA_SIZE 1456
 
 typedef struct CHUNK {
@@ -137,7 +136,7 @@ int main(int argc, const char **argv) {
 		printf("Error: missing or extra arguments");
 			return 1;
 	}
-	int port = atoi(argv[1]);
+	int  port = atoi(argv[1]);
 	int windowsize = atoi(argv[2]);
 	char file[100];
 	strcpy(file, argv[3]);
