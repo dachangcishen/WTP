@@ -46,8 +46,8 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize,c
 		exit(-1);
 	}
 	FILE* fd_log = fopen(log, "w+");
-	if (fd_lof == NULL) {
-		printf(Error in open log file);
+	if (fd_log == NULL) {
+		printf("Error in open log file");
 		exit(-1);
 	}
 	printf("receiver file and log set\n");
@@ -69,32 +69,32 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize,c
 	while (1) {
 		memset((char*)&ack, 0, sizeof(ack));
 		memset((char*)&buffer, 0, sizeof(buffer));
-		rec = recvfrom(sockfd, &buffer, sizeof(chunk), 0, (struct sockaddr*)&other_addr, &slen);
+		int rec = recvfrom(sockfd, &buffer, sizeof(chunk), 0, (struct sockaddr*)&other_addr, &slen);
 		if (rec > 0) {
 			if (buffer.header.type == 0) {
-				logging(log, buffer.header);
+				logging(fd_log, buffer.header);
 				ack.type = 3;
 				ack.length = 0;
 				start_seq = buffer.header.seqNum;
 				ack.seqNum = buffer.header.seqNum;
 				sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
-				logging(log, ack);
+				logging(fd_log, ack);
 			}
 			if (buffer.header.type == 1 && status == 1) {
-				logging(log, buffer.header);
+				logging(fd_log, buffer.header);
 				ack.type = 3;
 				ack.length = 0;
 				ack.seqNum = buffer.header.seqNum;
 				sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
-				logging(log, ack);
+				logging(fd_log, ack);
 				break;
 			}
 			if (buffer.header.type == 2 && buffer.header.seqNum < ack_seq + windowsize && buffer.header.seqNum >= ack_seq ) {
-				if (buffer.header.checksum == crc32(buffer.data, buffer.header.length)) {
+				if (buffer.header.checksum == crc32(buffer.content, buffer.header.length)) {
 					cou++;
-					logging(log, buffer.header);
+					logging(fd_log, buffer.header);
 					fseek(fd_output, SEEK_END, SEEK_SET);
-					fwrite(buffer.data, 1, buffer.header.length, fd_output);
+					fwrite(buffer.content, 1, buffer.header.length, fd_output);
 					status = 1;
 					if (cou == windowsize) {
 						ack_seq += cou;
@@ -137,8 +137,8 @@ int main(int argc, const char **argv) {
 		printf("Error: missing or extra arguments");
 			return 1;
 	}
-	int * port = atoi(argv[1]);
-	int * windowsize = atoi(argv[2]);
+	int port = atoi(argv[1]);
+	int windowsize = atoi(argv[2]);
 	char file[100];
 	strcpy(file, argv[3]);
 	char log[100];
@@ -152,10 +152,11 @@ int main(int argc, const char **argv) {
 	}
 	struct sockaddr_in addr, other_addr;
 	int len;  
-  	memset(&addr_serv, 0, sizeof(struct sockaddr_in));  
+  	memset(&addr, 0, sizeof(struct sockaddr_in));  
+	memset(&other_addr, 0, sizeof(struct sockaddr_in));
   	addr.sin_family = AF_INET;  
-	addr->sin_addr.s_addr = htonl(INADDR_ANY);　　　　　　　　　　　 
   	addr.sin_port = htons(port);
+	addr.sin_addr.s_addr = INADDR_ANY;
 
 
 
@@ -168,7 +169,7 @@ int main(int argc, const char **argv) {
 	struct timeval read_timeout;
 	read_timeout.tv_sec = 0;
 	read_timeout.tv_usec = 500000;
-	int res = setsockopt(socketfd, SOL_SOCKET, SO_RCVTIMEO, &read_timeout, sizeof(read_timeout));
+	int res = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &read_timeout, sizeof(read_timeout));
 	if(res < 0)
 	{
 		perror("Setting sockopt failed");
