@@ -29,16 +29,21 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize,c
 	
 	//setting file
 	FILE* fd;
-
+	char file[100];
+	if (outFile[0] == '/') {
+		file[0] = '.';
+	}
+	strcat(file, outFile);
 	char p1[] = "/FILE-";
 	char p2[5];
 	sprintf(p2, "%d", counter);
 	char p3[] = ".out";
 	char path[100];
-	strcpy(path, outFile);
+	strcpy(path, file);
 	strcat(path, p1);
 	strcat(path, p2);
 	strcat(path, p3);
+	printf("%s\n", path);
 	FILE* fd_output = fopen(path, "w+");
 	if (fd_output == NULL) {
 		printf("Erro in open dic");
