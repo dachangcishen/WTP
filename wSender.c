@@ -7,23 +7,34 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
-
+#include "crc32.h"
 #define DATA_SIZE 1456
 
+struct PacketHeader {
+	unsigned int type;     // 0: START; 1: END; 2: DATA; 3: ACK
+	unsigned int seqNum;   // Describe afterwards
+	unsigned int length;   // Length of data; 0 for ACK, START and END packets
+	unsigned int checksum; // 32-bit CRC
+};
 
 struct packet {
-    int type;       // 0: START; 1: END; 2: DATA; 3: ACK
-    int seq_num;
-    int length;     // Length of data; 0 for ACK, START and END packets
-    int checksum;   // 32-bit CRC
+    struct PacketHeader header;
     char data[DATA_SIZE];    // up to 1456B 
 };
 
+
+void logging(FILE* log, struct PacketHeader buffer)
+{
+	fflush(log);
+	fprintf(log, "%u %u %u %u\n", buffer.type, buffer.seqNum, buffer.length, buffer.checksum);
+	fflush(log);
+}
+
 int create_packet(struct packet *p, int type, int seq_num, int length, int checksum, char *data) {
-    p->type = type;
-    p->seq_num = seq_num;
-    p->length = length;
-    p->checksum = checksum;
+    p->header.type = (unsigned int)type;
+    p->header.seqNum = (unsigned int)seq_num;
+    p->header.length = (unsigned int)length;
+    p->header.checksum = (unsigned int)checksum;
     memcpy(p->data, data, length);
     return length;
 }
@@ -35,7 +46,7 @@ int send_packet(int sockfd, struct packet *p, struct sockaddr_in *addr) {
 
 int recv_packet(int sockfd, struct packet *p, struct sockaddr_in *addr) {
     int len = sizeof(*addr);
-    return recvfrom(sockfd, p, sizeof(*p), MSG_DONTWAIT, (struct sockaddr*) addr, &len);
+    return recvfrom(sockfd, p, sizeof(struct PacketHeader), MSG_DONTWAIT, (struct sockaddr*) addr, &len);
 }
 
 int main(int argc, char *argv[]) {
@@ -109,7 +120,7 @@ int main(int argc, char *argv[]) {
             // Wait for ack
             attempts = 0;
             while (start_ack == 0 && attempts < max_attempts) {
-                if (recv_packet(sockfd, &p, &addr) >= 0 && p.type == 3 && p.seq_num == ran_num) {
+                if (recv_packet(sockfd, &p, &addr) >= 0 && p.header.type == 3 && p.header.seqNum == ran_num) {
                     printf("Received start ack\n");
                     start_ack = 1;
                 }
@@ -143,7 +154,7 @@ int main(int argc, char *argv[]) {
                 end_ack = 0;
                 attempts = 0;
                 while (end_ack == 0 && attempts < max_attempts) {
-                    if (recv_packet(sockfd, &p, &addr) >= 0 && p.type == 3 && p.seq_num == ran_num) {
+                    if (recv_packet(sockfd, &p, &addr) >= 0 && p.header.type == 3 && p.header.seqNum == ran_num) {
                         printf("Received ack %d\n", ran_num);
                         end_ack = 1;
                     }
@@ -174,7 +185,7 @@ int main(int argc, char *argv[]) {
                 send_ack = 0;
                 attempts = 0;
                 while (send_ack == 0 && attempts < max_attempts) {
-                    if (recv_packet(sockfd, &p, &addr) >= 0 && p.type == 3 && p.seq_num == ack_num) {
+                    if (recv_packet(sockfd, &p, &addr) >= 0 && p.header.type == 3 && p.header.seqNum == ack_num) {
                         printf("Received ack %d\n", ack_num);
                         send_ack = 1;
                         ack_num++;
