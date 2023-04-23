@@ -44,9 +44,9 @@ int send_packet(int sockfd, struct packet *p, struct sockaddr_in *addr) {
     return sendto(sockfd, p, sizeof(*p), 0, (struct sockaddr*) addr, len);
 }
 
-int recv_packet(int sockfd, struct packet *p, struct sockaddr_in *addr) {
+int recv_packet(int sockfd, struct PacketHeader *h, struct sockaddr_in *addr) {
     int len = sizeof(*addr);
-    return recvfrom(sockfd, p, sizeof(struct PacketHeader), MSG_DONTWAIT, (struct sockaddr*) addr, &len);
+    return recvfrom(sockfd, h, sizeof(*h), 0, (struct sockaddr*) addr, &len);
 }
 
 int main(int argc, char *argv[]) {
@@ -82,8 +82,8 @@ int main(int argc, char *argv[]) {
     addr.sin_port = htons(port);
 
     struct timeval tv;
-    tv.tv_sec = timeout;
-    tv.tv_usec = 0;
+    tv.tv_sec = 0;
+    tv.tv_usec = 500000;
     if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
         perror("Error setting socket options");
         return 0;
@@ -106,11 +106,14 @@ int main(int argc, char *argv[]) {
 
     while (!done) {
         struct packet p;
+        struct PacketHeader h;
+        
         memset(&p, 0, sizeof(p));
-
+        memset(&h, 0, sizeof(h));
         if (seq_num == -1) {
             // Send start packet
             create_packet(&p, 0, ran_num, strlen(filename) + 1, 0, filename);
+            printf("%d %d \n",p.header.type,p.header.seqNum);
             if (send_packet(sockfd, &p, &addr) < 0) {
                 perror("Error sending packet");
                 return 0;
@@ -120,11 +123,12 @@ int main(int argc, char *argv[]) {
             // Wait for ack
             attempts = 0;
             while (start_ack == 0 && attempts < max_attempts) {
-                if (recv_packet(sockfd, &p, &addr) >= 0 && p.header.type == 3 && p.header.seqNum == ran_num) {
+                if (recv_packet(sockfd, &h, &addr) >= 0 && h.type == 3 && h.seqNum == ran_num) {
                     printf("Received start ack\n");
                     start_ack = 1;
                 }
                 else {
+                    printf("%d %d\n",h.type, h.seqNum);
                     printf("Timeout waiting for start ack\n");
                     if (send_packet(sockfd, &p, &addr) < 0) {
                         perror("Error resending packet");
@@ -154,7 +158,7 @@ int main(int argc, char *argv[]) {
                 end_ack = 0;
                 attempts = 0;
                 while (end_ack == 0 && attempts < max_attempts) {
-                    if (recv_packet(sockfd, &p, &addr) >= 0 && p.header.type == 3 && p.header.seqNum == ran_num) {
+                    if (recv_packet(sockfd, &h, &addr) >= 0 && h.type == 3 && h.seqNum == ran_num) {
                         printf("Received ack %d\n", ran_num);
                         end_ack = 1;
                     }
@@ -185,7 +189,7 @@ int main(int argc, char *argv[]) {
                 send_ack = 0;
                 attempts = 0;
                 while (send_ack == 0 && attempts < max_attempts) {
-                    if (recv_packet(sockfd, &p, &addr) >= 0 && p.header.type == 3 && p.header.seqNum == ack_num) {
+                    if (recv_packet(sockfd, &h, &addr) >= 0 && h.type == 3 && h.seqNum == ack_num) {
                         printf("Received ack %d\n", ack_num);
                         send_ack = 1;
                         ack_num++;
