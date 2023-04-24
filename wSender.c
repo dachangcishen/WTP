@@ -199,7 +199,6 @@ int main(int argc, char *argv[]) {
                             printf("Received ack %d\n", h.seqNum);
                             logging(fd_log, h);
                             send_ack = 1;
-                            total_packets_acked += h.seqNum - seq_num;
                             seq_num = h.seqNum - 1;
                         }
                         else {
@@ -226,7 +225,6 @@ int main(int argc, char *argv[]) {
 
     printf("Total bytes sent: %d\n", total_bytes_sent);
     printf("Total packets sent: %d\n", total_packets_sent);
-    printf("Total packets acked: %d\n", total_packets_acked);
 
     fclose(fp);
     close(sockfd);
