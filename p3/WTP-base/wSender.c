@@ -144,6 +144,7 @@ int main(int argc, char *argv[]) {
         }
         else {
             // Send data packet
+            fseek(fp, seq_num * DATA_SIZE, SEEK_SET);
             buffer_len = fread(buffer, 1, DATA_SIZE, fp);
             if (buffer_len == 0) {
                 // End of file reached
