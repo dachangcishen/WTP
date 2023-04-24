@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
         memset(&h, 0, sizeof(h));
         if (seq_num == -1) {
             // Send start packet
-            create_packet(&p, 0, ran_num, strlen(filename) + 1, 0, filename);
+            create_packet(&p, 0, ran_num, 0, 0, "");
             printf("%d %d \n",p.header.type,p.header.seqNum);
             if (send_packet(sockfd, &p, &addr) < 0) {
                 perror("Error sending packet");
@@ -177,7 +177,7 @@ int main(int argc, char *argv[]) {
                 }
             }
             else {
-                create_packet(&p, 2, seq_num, buffer_len, 0, buffer);
+                create_packet(&p, 2, seq_num, buffer_len, crc32(buffer, buffer_len), buffer);
                 if (send_packet(sockfd, &p, &addr) < 0) {
                     perror("Error sending packet");
                     return 0;
