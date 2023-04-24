@@ -92,7 +92,6 @@ int main(int argc, char *argv[]) {
     int seq_num = -1;
     srand(time(NULL));
     int ran_num = (rand() % 2048) + 1;
-    int ack_num = 0;
     int start_ack = 0;
     int end_ack = 0;
     int send_ack = 0;
@@ -103,7 +102,7 @@ int main(int argc, char *argv[]) {
     int total_packets_acked = 0;
     int attempts = 0;
     int done = 0;
-
+    int cou = 0;
     while (!done) {
         struct packet p;
         struct PacketHeader h;
@@ -186,28 +185,34 @@ int main(int argc, char *argv[]) {
                 total_bytes_sent += buffer_len;
                 total_packets_sent++;
 
-                send_ack = 0;
-                attempts = 0;
-                while (send_ack == 0 && attempts < max_attempts) {
-                    if (recv_packet(sockfd, &h, &addr) >= 0 && h.type == 3 && h.seqNum == ack_num) {
-                        printf("Received ack %d\n", ack_num);
-                        send_ack = 1;
-                        ack_num++;
-                        total_packets_acked++;
-                    }
-                    else {
-                        printf("Timeout waiting for ack %d\n", ack_num);
-                        if (send_packet(sockfd, &p, &addr) < 0) {
-                            perror("Error resending packet");
-                            return 0;
+                cou++;
+
+                if(cou == windowsize){
+                    send_ack = 0;
+                    attempts = 0;
+                    while (send_ack == 0 && attempts < max_attempts) {
+                        if (recv_packet(sockfd, &h, &addr) >= 0 && h.type == 3) {
+                            printf("Received ack %d\n", h.seqNum);
+                            send_ack = 1;
+                            total_packets_acked += h.seqNum - seq_num;
+                            seq_num = h.seqNum - 1;
                         }
-                        attempts++;
+                        else {
+                            printf("Timeout waiting for ack\n");
+                            if (send_packet(sockfd, &p, &addr) < 0) {
+                                perror("Error resending packet");
+                                return 0;
+                            }
+                            attempts++;
+                        }
                     }
+                    if (send_ack == 0) {
+                        perror("Error sending data packet");
+                        return 0;
+                    }
+                    cou = 0;
                 }
-                if (send_ack == 0) {
-                    perror("Error sending data packet");
-                    return 0;
-                }
+                
             }
         }
 
