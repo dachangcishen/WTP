@@ -1,4 +1,4 @@
-#include <arpa/inet.h>		// ntohs()
+﻿#include <arpa/inet.h>		// ntohs()
 #include <stdio.h>		// printf(), perror()
 #include <stdlib.h>		// atoi()
 #include <string.h>		// strlen()
@@ -20,16 +20,17 @@ typedef struct CHUNK {
 	char content[DATA_SIZE];
 } chunk;
 
-void logging(FILE* log, struct PacketHeader buffer)
+void logging(char * log, struct PacketHeader buffer)
 {
-	fflush(log);
-	fprintf(log, "%u %u %u %u\n", buffer.type, buffer.seqNum, buffer.length, buffer.checksum);
-	fflush(log);
+	FILE* out = fopen(log, "a+");
+	int k = fprintf(out, "%u %u %u %u\n", buffer.type, buffer.seqNum, buffer.length, buffer.checksum);
+	fclose(out);
+	printf("%d\n", buffer.seqNum);
 }
 
 
-int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize,char * outFile, char * log , int counter) {
-	
+int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize, char* outFile, char* log, int counter) {
+
 	//setting file
 	FILE* fd;
 	char file[100];
@@ -49,11 +50,7 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize,c
 		printf("Erro in open dic");
 		exit(-1);
 	}
-	FILE* fd_log = fopen(log, "w+");
-	if (fd_log == NULL) {
-		printf("Error in open log file");
-		exit(-1);
-	}
+	
 	printf("receiver file and log set\n");
 	int slen = sizeof(other_addr);
 	//setting packet message
@@ -76,37 +73,36 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize,c
 		int rec = recvfrom(sockfd, &buffer, sizeof(chunk), 0, (struct sockaddr*)&other_addr, &slen);
 		if (rec > 0) {
 			if (buffer.header.type == 0) {
-				logging(fd_log, buffer.header);
+				logging(log, buffer.header);
 				ack.type = 3;
 				ack.length = 0;
 				start_seq = buffer.header.seqNum;
 				ack.seqNum = buffer.header.seqNum;
 				sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
-				logging(fd_log, ack);
+				logging(log, ack);
 			}
 			if (buffer.header.type == 1 && status == 1) {
-				logging(fd_log, buffer.header);
+				logging(log, buffer.header);
 				ack.type = 3;
 				ack.length = 0;
 				ack.seqNum = buffer.header.seqNum;
 				sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
-				logging(fd_log, ack);
+				logging(log, ack);
 				break;
 			}
-			if (buffer.header.type == 2 && buffer.header.seqNum < ack_seq + windowsize && buffer.header.seqNum >= ack_seq ) {
+			if (buffer.header.type == 2 && buffer.header.seqNum < ack_seq + windowsize && buffer.header.seqNum >= ack_seq) {
 				if (buffer.header.checksum == crc32(buffer.content, buffer.header.length)) {
 					cou++;
-					logging(fd_log, buffer.header);
+					logging(log, buffer.header);
 					fseek(fd_output, buffer.header.seqNum * 1455, SEEK_SET);
 					fwrite(buffer.content, 1, buffer.header.length, fd_output);
-					printf("%s", buffer.content);
 					status = 1;
 					if (cou == windowsize) {
 						ack_seq += cou;
 						ack.type = 3;
 						ack.seqNum = buffer.header.seqNum + 1;
 						sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
-						logging(fd_log, ack);
+						logging(log, ack);
 						cou = 0;
 					}
 				}
@@ -115,13 +111,13 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize,c
 					ack.type = 3;
 					ack.seqNum = buffer.header.seqNum;
 					sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
-					logging(fd_log, ack);
+					logging(log, ack);
 					cou = 0;
 				}
 			}
 		}
 		else {
-			if (cou = 0) {
+			if (cou == 0) {
 				continue;
 			}
 			else {
@@ -129,7 +125,7 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize,c
 				ack.type = 3;
 				ack.seqNum = buffer.header.seqNum + 1;
 				sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
-				logging(fd_log, ack);
+				logging(log, ack);
 				cou = 0;
 			}
 		}
@@ -137,10 +133,10 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize,c
 	}
 }
 
-int main(int argc, const char **argv) {
-	if(argc != 5){
+int main(int argc, const char** argv) {
+	if (argc != 5) {
 		printf("Error: missing or extra arguments");
-			return 1;
+		return 1;
 	}
 	int  port = atoi(argv[1]);
 	int windowsize = atoi(argv[2]);
@@ -157,7 +153,10 @@ int main(int argc, const char **argv) {
 	}
 	char log[100];
 	strcpy(log, argv[4]);
-	
+
+	FILE* k = fopen(log, "w");
+	fprintf(k, "");
+
 	//create UDP socket
 	int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (sockfd == -1) {
@@ -165,30 +164,30 @@ int main(int argc, const char **argv) {
 		return -1;
 	}
 	struct sockaddr_in addr, other_addr;
-	int len;  
-  	memset(&addr, 0, sizeof(struct sockaddr_in));  
+	int len;
+	memset(&addr, 0, sizeof(struct sockaddr_in));
 	memset(&other_addr, 0, sizeof(struct sockaddr_in));
-  	addr.sin_family = AF_INET;  
-  	addr.sin_port = htons(port);
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(port);
 	addr.sin_addr.s_addr = INADDR_ANY;
 
 
 
-  	if (bind(sockfd, (struct sockaddr *) &addr, sizeof(addr)) == -1) {
+	if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
 		perror("Error binding stream socket");
 		return -1;
 	}
-	
+
 	//set timeout
 	struct timeval read_timeout;
 	read_timeout.tv_sec = 0;
 	read_timeout.tv_usec = 500000;
 	int res = setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &read_timeout, sizeof(read_timeout));
-	if(res < 0)
+	if (res < 0)
 	{
 		perror("Setting sockopt failed");
 	}
-
+	fclose(k);
 	for (int i = 0;; i++) {
 
 		int result = recive(sockfd, other_addr, port, windowsize, path, log, i);
