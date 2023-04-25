@@ -13,7 +13,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define DATA_SIZE 1456
+#define DATA_SIZE 1472
 
 typedef struct CHUNK {
 	struct PacketHeader header;
@@ -25,7 +25,6 @@ void logging(char * log, struct PacketHeader buffer)
 	FILE* out = fopen(log, "a+");
 	int k = fprintf(out, "%u %u %u %u\n", buffer.type, buffer.seqNum, buffer.length, buffer.checksum);
 	fclose(out);
-	printf("%d\n", buffer.seqNum);
 }
 
 
@@ -94,8 +93,9 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize, 
 				if (buffer.header.checksum == crc32(buffer.content, buffer.header.length)) {
 					cou++;
 					logging(log, buffer.header);
-					fseek(fd_output, buffer.header.seqNum * 1455, SEEK_SET);
+					fseek(fd_output, buffer.header.seqNum * 1472, SEEK_SET);
 					fwrite(buffer.content, 1, buffer.header.length, fd_output);
+					printf("%s\n", buffer.content);
 					status = 1;
 					if (cou == windowsize) {
 						ack_seq += cou;
@@ -131,6 +131,7 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize, 
 		}
 		printf("ackseq %d\n", ack_seq);
 	}
+	fclose(fd_output);
 }
 
 int main(int argc, const char** argv) {

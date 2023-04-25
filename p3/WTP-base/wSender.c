@@ -8,7 +8,7 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include "crc32.h"
-#define DATA_SIZE 1456
+#define DATA_SIZE 1472
 
 struct PacketHeader {
 	unsigned int type;     // 0: START; 1: END; 2: DATA; 3: ACK
