@@ -1,6 +1,6 @@
 all: wReceiver wSender
 
-wReciver: wReciver.c
+wReceiver: wReceiver.c
 			gcc -o  wReceiver wReceiver.c 
 
 wSender: wSender.c
