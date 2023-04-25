@@ -9,6 +9,9 @@
 #include <netinet/in.h>
 #include "PacketHeader.h"
 #include "crc32.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define DATA_SIZE 1456
 
@@ -30,9 +33,7 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize,c
 	//setting file
 	FILE* fd;
 	char file[100];
-	if (outFile[0] == '/') {
-		file[0] = '.';
-	}
+	memset(file, 0, 100);
 	strcat(file, outFile);
 	char p1[] = "/FILE-";
 	char p2[5];
@@ -43,7 +44,6 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize,c
 	strcat(path, p1);
 	strcat(path, p2);
 	strcat(path, p3);
-	printf("%s\n", path);
 	FILE* fd_output = fopen(path, "w+");
 	if (fd_output == NULL) {
 		printf("Erro in open dic");
@@ -97,8 +97,9 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize,c
 				if (buffer.header.checksum == crc32(buffer.content, buffer.header.length)) {
 					cou++;
 					logging(fd_log, buffer.header);
-					fseek(fd_output, SEEK_END, SEEK_SET);
+					fseek(fd_output, buffer.header.seqNum * 1455, SEEK_SET);
 					fwrite(buffer.content, 1, buffer.header.length, fd_output);
+					printf("%s", buffer.content);
 					status = 1;
 					if (cou == windowsize) {
 						ack_seq += cou;
@@ -145,6 +146,15 @@ int main(int argc, const char **argv) {
 	int windowsize = atoi(argv[2]);
 	char file[100];
 	strcpy(file, argv[3]);
+	char path[] = ".";
+	strcat(path, file);
+	printf("%s\n", path);
+	if (access(path, 0)) {
+		int tt = mkdir(path, S_IRWXO);
+		if (tt != 0) {
+			perror("Erro in building new dir\n");
+		}
+	}
 	char log[100];
 	strcpy(log, argv[4]);
 	
@@ -181,7 +191,7 @@ int main(int argc, const char **argv) {
 
 	for (int i = 0;; i++) {
 
-		int result = recive(sockfd, other_addr, port, windowsize, file, log, i);
+		int result = recive(sockfd, other_addr, port, windowsize, path, log, i);
 		if (result != 0)
 			i--;
 	}
