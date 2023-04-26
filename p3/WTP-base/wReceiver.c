@@ -95,7 +95,6 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize, 
 					logging(log, buffer.header);
 					fseek(fd_output, buffer.header.seqNum * 1472, SEEK_SET);
 					fwrite(buffer.content, 1, buffer.header.length, fd_output);
-					printf("%s\n", buffer.content);
 					status = 1;
 					if (cou == windowsize) {
 						ack_seq += cou;
@@ -143,8 +142,9 @@ int main(int argc, const char** argv) {
 	int windowsize = atoi(argv[2]);
 	char file[100];
 	strcpy(file, argv[3]);
-	char path[] = ".";
+	char path[] = "";
 	strcat(path, file);
+	printf("%s\n",path);
 	char log[100];
 	strcpy(log, argv[4]);
 
