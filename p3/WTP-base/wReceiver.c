@@ -145,18 +145,11 @@ int main(int argc, const char** argv) {
 	strcpy(file, argv[3]);
 	char path[] = ".";
 	strcat(path, file);
-	printf("%s\n", path);
-	if (access(path, 0)) {
-		int tt = mkdir(path, S_IRWXO);
-		if (tt != 0) {
-			perror("Erro in building new dir\n");
-		}
-	}
 	char log[100];
 	strcpy(log, argv[4]);
 
-	FILE* k = fopen(log, "w");
-	fprintf(k, "");
+	/*FILE* k = fopen(log, "w");
+	fprintf(k, "");*/
 
 	//create UDP socket
 	int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -188,7 +181,7 @@ int main(int argc, const char** argv) {
 	{
 		perror("Setting sockopt failed");
 	}
-	fclose(k);
+	//fclose(k);
 	for (int i = 0;; i++) {
 
 		int result = recive(sockfd, other_addr, port, windowsize, path, log, i);

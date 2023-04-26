@@ -23,11 +23,11 @@ struct packet {
 };
 
 
-void logging(FILE* log, struct PacketHeader buffer)
+void logging(char* log, struct PacketHeader buffer)
 {
-	fflush(log);
-	fprintf(log, "%u %u %u %u\n", buffer.type, buffer.seqNum, buffer.length, buffer.checksum);
-	fflush(log);
+    FILE* out = fopen(log, "a+");
+    int k = fprintf(out, "%u %u %u %u\n", buffer.type, buffer.seqNum, buffer.length, buffer.checksum);
+    fclose(out);
 }
 
 int create_packet(struct packet *p, int type, int seq_num, int length, int checksum, char *data) {
@@ -116,14 +116,14 @@ int main(int argc, char *argv[]) {
                 perror("Error sending packet");
                 return 0;
             }
-            logging(fd_log, p.header);
+            logging(log, p.header);
             printf("Sent start packet\n");
             start_ack = 0;
             // Wait for ack
             attempts = 0;
             while (start_ack == 0 && attempts < max_attempts) {
                 if (recv_packet(sockfd, &h, &addr) >= 0 && h.type == 3 && h.seqNum == ran_num) {
-                    logging(fd_log, h);
+                    logging(log, h);
                     printf("Received start ack\n");
                     start_ack = 1;
                 }
@@ -153,7 +153,7 @@ int main(int argc, char *argv[]) {
                     perror("Error sending packet");
                     return 0;
                 }
-                logging(fd_log, p.header);
+                logging(log, p.header);
                 printf("Sent end packet\n");
                 done = 1;
                 
@@ -161,7 +161,7 @@ int main(int argc, char *argv[]) {
                 attempts = 0;
                 while (end_ack == 0 && attempts < max_attempts) {
                     if (recv_packet(sockfd, &h, &addr) >= 0 && h.type == 3 && h.seqNum == ran_num) {
-                        logging(fd_log, h);
+                        logging(log, h);
                         printf("Received ack %d\n", ran_num);
                         end_ack = 1;
                     }
@@ -185,7 +185,7 @@ int main(int argc, char *argv[]) {
                     perror("Error sending packet");
                     return 0;
                 }
-                logging(fd_log, p.header);
+                logging(log, p.header);
                 printf("Sent data packet %d\n", seq_num);
                 total_bytes_sent += buffer_len;
                 total_packets_sent++;
@@ -198,7 +198,7 @@ int main(int argc, char *argv[]) {
                     while (send_ack == 0 && attempts < max_attempts) {
                         if (recv_packet(sockfd, &h, &addr) >= 0 && h.type == 3) {
                             printf("Received ack %d\n", h.seqNum);
-                            logging(fd_log, h);
+                            logging(log, h);
                             send_ack = 1;
                             seq_num = h.seqNum - 1;
                         }
