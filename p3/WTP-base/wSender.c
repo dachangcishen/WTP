@@ -44,6 +44,11 @@ int send_packet(int sockfd, struct packet *p, struct sockaddr_in *addr) {
     return sendto(sockfd, p, sizeof(*p), 0, (struct sockaddr*) addr, len);
 }
 
+int send_packets(int sockfd, struct packet *p, struct sockaddr_in *addr, int windowsize){
+    int len = sizeof(*addr);
+    return sendto(sockfd, p, windowsize * sizeof(*p), 0, (struct sockaddr*) addr, len);
+}
+
 int recv_packet(int sockfd, struct PacketHeader *h, struct sockaddr_in *addr) {
     int len = sizeof(*addr);
     return recvfrom(sockfd, h, sizeof(*h), 0, (struct sockaddr*) addr, &len);
@@ -102,6 +107,10 @@ int main(int argc, char *argv[]) {
     int attempts = 0;
     int done = 0;
     int cou = 0;
+    int max_ack = -1;
+
+    struct packet* list = (struct packet*)malloc(sizeof(struct packet) * windowsize); 
+
     while (!done) {
         struct packet p;
         struct PacketHeader h;
@@ -148,6 +157,39 @@ int main(int argc, char *argv[]) {
             buffer_len = fread(buffer, 1, DATA_SIZE, fp);
             if (buffer_len == 0) {
                 // End of file reached
+                if(cou > 0){
+                    if (send_packets(sockfd, list, &addr, cou) < 0) {
+                        perror("Error sending packet");
+                        return 0;
+                    }
+
+                    send_ack = 0;
+                    attempts = 0;
+                    while (send_ack == 0 && attempts < max_attempts) {
+                        if (recv_packet(sockfd, &h, &addr) >= 0 && h.type == 3) {
+                            printf("Received ack %d\n", h.seqNum);
+                            if(max_ack < (int)h.seqNum) max_ack = h.seqNum;
+                            logging(log, h);
+                            send_ack = 1;
+                            seq_num = max_ack - 1;
+                        }
+                        else {
+                            printf("Timeout waiting for ack\n");
+                            if (send_packet(sockfd, &p, &addr) < 0) {
+                                perror("Error resending packet");
+                                return 0;
+                            }
+                            attempts++;
+                        }
+                    }
+                    if (send_ack == 0) {
+                        perror("Error sending data packet");
+                        return 0;
+                    }
+                    cou = 0;
+                }
+
+
                 create_packet(&p, 1, ran_num, 0, 0, "");
                 if (send_packet(sockfd, &p, &addr) < 0) {
                     perror("Error sending packet");
@@ -181,26 +223,36 @@ int main(int argc, char *argv[]) {
             }
             else {
                 create_packet(&p, 2, seq_num, buffer_len, crc32(buffer, buffer_len), buffer);
+                list[cou] = p;
+                /*
                 if (send_packet(sockfd, &p, &addr) < 0) {
                     perror("Error sending packet");
                     return 0;
                 }
+                */
                 logging(log, p.header);
-                printf("Sent data packet %d\n", seq_num);
+                //printf("Sent data packet %d\n", seq_num);
                 total_bytes_sent += buffer_len;
                 total_packets_sent++;
 
                 cou++;
 
                 if(cou == windowsize){
+
+                    if (send_packets(sockfd, list, &addr, windowsize) < 0) {
+                        perror("Error sending packet");
+                        return 0;
+                    }
+
                     send_ack = 0;
                     attempts = 0;
                     while (send_ack == 0 && attempts < max_attempts) {
                         if (recv_packet(sockfd, &h, &addr) >= 0 && h.type == 3) {
                             printf("Received ack %d\n", h.seqNum);
+                            if(max_ack < (int)h.seqNum) max_ack = h.seqNum;
                             logging(log, h);
                             send_ack = 1;
-                            seq_num = h.seqNum - 1;
+                            seq_num = max_ack - 1;
                         }
                         else {
                             printf("Timeout waiting for ack\n");
@@ -223,7 +275,7 @@ int main(int argc, char *argv[]) {
 
         seq_num++;
     }
-
+    free(list);
     printf("Total bytes sent: %d\n", total_bytes_sent);
     printf("Total packets sent: %d\n", total_packets_sent);
 

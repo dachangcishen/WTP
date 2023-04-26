@@ -55,81 +55,69 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize, 
 	//setting packet message
 
 	struct PacketHeader ack;
-	chunk buffer;
+	chunk * buffer=(chunk*)malloc(sizeof(chunk)*windowsize);
 
 	printf("message setted");
 
 	//start getting message
-	memset((char*)&ack, 0, sizeof(ack));
-	memset((char*)&buffer, 0, sizeof(buffer));
 	int cou = 0;
 	int status = 0;
 	int ack_seq = 0;
 	int start_seq;
 	while (1) {
 		memset((char*)&ack, 0, sizeof(ack));
-		memset((char*)&buffer, 0, sizeof(buffer));
-		int rec = recvfrom(sockfd, &buffer, sizeof(chunk), 0, (struct sockaddr*)&other_addr, &slen);
+		memset((char*)buffer, 0, sizeof(chunk)*windowsize);
+		int rec = recvfrom(sockfd, buffer, sizeof(chunk)*windowsize, 0, (struct sockaddr*)&other_addr, &slen);
 		if (rec > 0) {
-			if (buffer.header.type == 0) {
-				logging(log, buffer.header);
+			if (buffer[0].header.type == 0) {
+				logging(log, buffer[0].header);
 				ack.type = 3;
 				ack.length = 0;
-				start_seq = buffer.header.seqNum;
-				ack.seqNum = buffer.header.seqNum;
+				start_seq = buffer[0].header.seqNum;
+				ack.seqNum = buffer[0].header.seqNum;
 				sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
 				logging(log, ack);
 			}
-			if (buffer.header.type == 1 && status == 1) {
-				logging(log, buffer.header);
+			if (buffer[0].header.type == 1 && status == 1) {
+				logging(log, buffer[0].header);
 				ack.type = 3;
 				ack.length = 0;
-				ack.seqNum = buffer.header.seqNum;
+				ack.seqNum = buffer[0].header.seqNum;
 				sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
 				logging(log, ack);
 				break;
 			}
-			if (buffer.header.type == 2 && buffer.header.seqNum < ack_seq + windowsize && buffer.header.seqNum >= ack_seq) {
-				if (buffer.header.checksum == crc32(buffer.content, buffer.header.length)) {
-					cou++;
-					logging(log, buffer.header);
-					fseek(fd_output, buffer.header.seqNum * 1472, SEEK_SET);
-					fwrite(buffer.content, 1, buffer.header.length, fd_output);
-					status = 1;
-					if (cou == windowsize) {
-						ack_seq += cou;
-						ack.type = 3;
-						ack.seqNum = buffer.header.seqNum + 1;
-						sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
-						logging(log, ack);
-						cou = 0;
+			if (buffer[0].header.type == 2) {
+				cou = 0;
+				for(int i =0;i<windowsize;i++){
+					if(buffer[i].header.type!=2){
+						break;
 					}
+					if(buffer[i].header.seqNum<ack_seq){
+						continue;
+					}
+					if(buffer[i].header.seqNum>=ack_seq+windowsize){
+						break;
+					}
+					if(buffer[i].header.checksum!=crc32(buffer[i].content,buffer[i].header.length)){
+						break;
+					}
+					cou++;
+					logging(log, buffer[i].header);
+					fseek(fd_output, buffer[i].header.seqNum * 1472, SEEK_SET);
+					fwrite(buffer[i].content, 1, buffer[i].header.length, fd_output);
 				}
-				else {
-					ack_seq += cou;
-					ack.type = 3;
-					ack.seqNum = buffer.header.seqNum;
-					sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
-					logging(log, ack);
-					cou = 0;
-				}
-			}
-		}
-		else {
-			if (cou == 0) {
-				continue;
-			}
-			else {
-				ack_seq += cou;
+				status =1;
+				ack_seq+=cou;
 				ack.type = 3;
-				ack.seqNum = buffer.header.seqNum + 1;
+				ack.seqNum = ack_seq;
 				sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
 				logging(log, ack);
-				cou = 0;
 			}
+			printf("ackseq %d\n", ack_seq);
 		}
-		printf("ackseq %d\n", ack_seq);
 	}
+	free(buffer);
 	fclose(fd_output);
 }
 
