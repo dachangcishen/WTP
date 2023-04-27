@@ -8,7 +8,7 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include "crc32.h"
-#define DATA_SIZE 1472
+#define DATA_SIZE 1456
 
 struct PacketHeader {
 	unsigned int type;     // 0: START; 1: END; 2: DATA; 3: ACK
@@ -39,14 +39,33 @@ int create_packet(struct packet *p, int type, int seq_num, int length, int check
     return length;
 }
 
+
 int send_packet(int sockfd, struct packet *p, struct sockaddr_in *addr) {
+    
+    char buff[1472] = {0};
+    memcpy(buff, p, 1472);
+    int len = sizeof(*addr);
+    return sendto(sockfd, buff, sizeof(buff), 0, (struct sockaddr*) addr, len);
+    
+    /*
     int len = sizeof(*addr);
     return sendto(sockfd, p, sizeof(*p), 0, (struct sockaddr*) addr, len);
+    */
 }
 
 int recv_packet(int sockfd, struct PacketHeader *h, struct sockaddr_in *addr) {
+    
+    char buff[16] = {0};
+    int len = sizeof(*addr);
+    int result = recvfrom(sockfd, buff, sizeof(buff), 0, (struct sockaddr*) addr, &len);
+    memcpy(h, buff, 16);
+    return result;
+    
+
+    /*
     int len = sizeof(*addr);
     return recvfrom(sockfd, h, sizeof(*h), 0, (struct sockaddr*) addr, &len);
+    */
 }
 
 int main(int argc, char *argv[]) {
@@ -54,7 +73,7 @@ int main(int argc, char *argv[]) {
         printf("Error! Please Run with proper argument\n");
         return 0;
     }
-
+    char c[1472];
     char *ip = argv[1];
     int port = atoi(argv[2]);
     int windowsize = atoi(argv[3]);
