@@ -109,6 +109,7 @@ int main(int argc, char *argv[]) {
     
     int seq_num = -1;
     srand(time(NULL));
+    unsigned int max_ack = 0;
     int ran_num = (rand() % 2048) + 1;
     int start_ack = 0;
     int end_ack = 0;
@@ -219,7 +220,9 @@ int main(int argc, char *argv[]) {
                             printf("Received ack %d\n", h.seqNum);
                             logging(log, h);
                             send_ack = 1;
-                            seq_num = h.seqNum - 1;
+                            if(max_ack < h.seqNum) max_ack = h.seqNum;
+                            seq_num = (int)max_ack - 1;
+                            
                         }
                         else {
                             printf("Timeout waiting for ack\n");
