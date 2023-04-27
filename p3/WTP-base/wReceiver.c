@@ -15,15 +15,10 @@
 
 #define DATA_SIZE 1472
 
-typedef struct CHUNK {
-	struct PacketHeader header;
-	char content[DATA_SIZE];
-} chunk;
-
-void logging(char * log, struct PacketHeader buffer)
+void logging(char * log, struct PacketHeader* buffer)
 {
 	FILE* out = fopen(log, "a+");
-	int k = fprintf(out, "%u %u %u %u\n", buffer.type, buffer.seqNum, buffer.length, buffer.checksum);
+	int k = fprintf(out, "%u %u %u %u\n", buffer->type, buffer->seqNum, buffer->length, buffer->checksum);
 	fclose(out);
 }
 
@@ -54,8 +49,11 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize, 
 	int slen = sizeof(other_addr);
 	//setting packet message
 
-	struct PacketHeader ack;
-	chunk * buffer=(chunk*)malloc(sizeof(chunk)*windowsize);
+	struct PacketHeader *ack = (struct PacketHeader*)malloc(sizeof(struct PacketHeader));
+	char header[16] = { 0 };
+	char buffer[DATA_SIZE] = { 0 };
+	char* data_of_window = (char*)malloc(sizeof(char) * DATA_SIZE*windowsize);
+	memset(data_of_window, 0, DATA_SIZE * windowsize);
 
 	printf("message setted");
 
@@ -64,60 +62,86 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize, 
 	int status = 0;
 	int ack_seq = 0;
 	int start_seq;
+	int cc = 0;
+
 	while (1) {
-		memset((char*)&ack, 0, sizeof(ack));
-		memset((char*)buffer, 0, sizeof(chunk)*windowsize);
-		int rec = recvfrom(sockfd, buffer, sizeof(chunk)*windowsize, 0, (struct sockaddr*)&other_addr, &slen);
+		cc++;
+		memset((char*)ack, 0, sizeof(ack));
+		memset((char*)data_of_window, 0, DATA_SIZE*windowsize);
+		int rec = recvfrom(sockfd, (char*)data_of_window, DATA_SIZE*windowsize, 0, (struct sockaddr*)&other_addr, &slen);
 		if (rec > 0) {
-			if (buffer[0].header.type == 0) {
-				logging(log, buffer[0].header);
-				ack.type = 3;
-				ack.length = 0;
-				start_seq = buffer[0].header.seqNum;
-				ack.seqNum = buffer[0].header.seqNum;
-				sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
-				logging(log, ack);
+			char first_header[16] = { 0 };
+			for (int i = 0; i < 16; i++) {
+				first_header[i] = data_of_window[i];
 			}
-			if (buffer[0].header.type == 1 && status == 1) {
-				logging(log, buffer[0].header);
-				ack.type = 3;
-				ack.length = 0;
-				ack.seqNum = buffer[0].header.seqNum;
-				sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
-				logging(log, ack);
+			struct PacketHeader* fheader = (struct PacketHeader*)first_header;
+			if (fheader->type == 0) {
+				logging(log, fheader);
+				fheader->type = 3;
+				start_seq = fheader->seqNum;
+				char acc[200] = { 0 };
+				memcpy(acc, fheader, 16);
+				sendto(sockfd, acc, sizeof(acc), 0, (struct sockaddr*)&other_addr, slen);
+				logging(log, fheader);
+			}
+			if (fheader->type == 1) {
+				logging(log, fheader);
+				fheader->type = 3;
+				start_seq = fheader->seqNum;
+				char acc[200] = { 0 };
+				memcpy(acc, fheader, 16);
+				sendto(sockfd, acc, sizeof(acc), 0, (struct sockaddr*)&other_addr, slen);
+				logging(log, fheader);
 				break;
 			}
-			if (buffer[0].header.type == 2) {
+			if (fheader->type == 2) {
 				cou = 0;
-				for(int i =0;i<windowsize;i++){
-					if(buffer[i].header.type!=2){
+				int i = 0;
+				int max = 0 ;
+				for(i = 0;i<windowsize;i++){
+					int offset = i * DATA_SIZE;
+					for (int j = 0; j < 16; j++) {
+						header[j] = data_of_window[j + offset];
+					}
+					struct PacketHeader* head = (struct PacketHeader*)header;
+					if(head->type!=2){
 						break;
 					}
-					if(buffer[i].header.seqNum<ack_seq){
+					if(head->seqNum<ack_seq){
+						printf("Packet %u Before Window, Window starts from %u\n",head->seqNum,ack_seq);
 						continue;
 					}
-					if(buffer[i].header.seqNum>=ack_seq+windowsize){
+					if(head->seqNum!=ack_seq+cou){
+						printf("Wrong Order Or missing packet %d\n",ack_seq+cou);
+						continue;
+					}
+					char data[1456] = { 0 };
+					for (int i = 0; i < head->length; i++) {
+						data[i] = data_of_window[i + 16+offset];
+					}
+					if(head->checksum!=crc32(data, head->length)){
+						printf("Wrong Content in %u\n", head->seqNum);
 						break;
 					}
-					if(buffer[i].header.checksum!=crc32(buffer[i].content,buffer[i].header.length)){
-						break;
-					}
+					logging(log, head);
+					fseek(fd_output, head->seqNum * 1456, SEEK_SET);
+					fwrite(data, 1, head->length, fd_output);
 					cou++;
-					logging(log, buffer[i].header);
-					fseek(fd_output, buffer[i].header.seqNum * 1472, SEEK_SET);
-					fwrite(buffer[i].content, 1, buffer[i].header.length, fd_output);
+					printf("%s", data);
 				}
-				status =1;
-				ack_seq+=cou;
-				ack.type = 3;
-				ack.seqNum = ack_seq;
-				sendto(sockfd, &ack, sizeof(struct PacketHeader), 0, (struct sockaddr*)&other_addr, slen);
+				ack_seq += cou;
+				ack->type = 3;
+				ack->seqNum = ack_seq;
+				char acc[1024] = { 0 };
+				memcpy(acc, ack, 16);
+				sendto(sockfd, acc, sizeof(acc), 0, (struct sockaddr*)&other_addr, slen);
 				logging(log, ack);
+				printf("ackseq %d\n", ack_seq);
 			}
-			printf("ackseq %d\n", ack_seq);
 		}
 	}
-	free(buffer);
+	free(data_of_window);
+	free(ack);
 	fclose(fd_output);
 }
 
