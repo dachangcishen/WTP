@@ -8,13 +8,13 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include "crc32.h"
-#define DATA_SIZE 1472
+#define DATA_SIZE 1456
 
 struct PacketHeader {
-	unsigned int type;     // 0: START; 1: END; 2: DATA; 3: ACK
-	unsigned int seqNum;   // Describe afterwards
-	unsigned int length;   // Length of data; 0 for ACK, START and END packets
-	unsigned int checksum; // 32-bit CRC
+    unsigned int type;     // 0: START; 1: END; 2: DATA; 3: ACK
+    unsigned int seqNum;   // Describe afterwards
+    unsigned int length;   // Length of data; 0 for ACK, START and END packets
+    unsigned int checksum; // 32-bit CRC
 };
 
 struct packet {
@@ -30,7 +30,7 @@ void logging(char* log, struct PacketHeader buffer)
     fclose(out);
 }
 
-int create_packet(struct packet *p, int type, int seq_num, int length, int checksum, char *data) {
+int create_packet(struct packet* p, int type, int seq_num, int length, int checksum, char* data) {
     p->header.type = (unsigned int)type;
     p->header.seqNum = (unsigned int)seq_num;
     p->header.length = (unsigned int)length;
@@ -39,35 +39,56 @@ int create_packet(struct packet *p, int type, int seq_num, int length, int check
     return length;
 }
 
-int send_packet(int sockfd, struct packet *p, struct sockaddr_in *addr) {
+int send_packet(int sockfd, struct packet* p, struct sockaddr_in* addr) {
+    char buff[1472] = { 0 };
+    memcpy(buff, p, 1472);
+    int len = sizeof(*addr);
+    return sendto(sockfd, buff, sizeof(buff), 0, (struct sockaddr*)addr, len);
+    /*
     int len = sizeof(*addr);
     return sendto(sockfd, p, sizeof(*p), 0, (struct sockaddr*) addr, len);
+    */
 }
 
-int send_packets(int sockfd, struct packet *p, struct sockaddr_in *addr, int windowsize){
+int send_packets(int sockfd, struct packet* p, struct sockaddr_in* addr, int windowsize) {
+    char* buff = (char*)malloc(sizeof(char) * 1472 * windowsize);
+    memcpy(buff, p, 1472 * windowsize);
+    int len = sizeof(*addr);
+    int res = sendto(sockfd, buff, 1472 * windowsize, 0, (struct sockaddr*)addr, len);
+    return res;
+    /*
     int len = sizeof(*addr);
     return sendto(sockfd, p, windowsize * sizeof(*p), 0, (struct sockaddr*) addr, len);
+    */
 }
 
-int recv_packet(int sockfd, struct PacketHeader *h, struct sockaddr_in *addr) {
+int recv_packet(int sockfd, struct PacketHeader* h, struct sockaddr_in* addr) {
+    char buff[16] = { 0 };
+    int len = sizeof(*addr);
+    int result = recvfrom(sockfd, buff, sizeof(buff), 0, (struct sockaddr*)addr, &len);
+    memcpy(h, buff, 16);
+    return result;
+    /*
     int len = sizeof(*addr);
     return recvfrom(sockfd, h, sizeof(*h), 0, (struct sockaddr*) addr, &len);
+    */
+
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     if (argc != 6) {
         printf("Error! Please Run with proper argument\n");
         return 0;
     }
 
-    char *ip = argv[1];
+    char* ip = argv[1];
     int port = atoi(argv[2]);
     int windowsize = atoi(argv[3]);
-    char *filename = argv[4];
-    char *log = argv[5];
+    char* filename = argv[4];
+    char* log = argv[5];
     int max_attempts = 10;
     FILE* fd_log = fopen(log, "w+");
-    FILE *fp = fopen(filename, "rb");
+    FILE* fp = fopen(filename, "rb");
     if (fp == NULL) {
         perror("Error opening file");
         return 0;
@@ -92,7 +113,7 @@ int main(int argc, char *argv[]) {
         perror("Error setting socket options");
         return 0;
     }
-    
+
     int seq_num = -1;
     srand(time(NULL));
     int ran_num = (rand() % 2048) + 1;
@@ -107,20 +128,20 @@ int main(int argc, char *argv[]) {
     int attempts = 0;
     int done = 0;
     int cou = 0;
-    int max_ack = -1;
+    int max_ack = 0;
 
-    struct packet* list = (struct packet*)malloc(sizeof(struct packet) * windowsize); 
+    struct packet* list = (struct packet*)malloc(sizeof(struct packet) * windowsize);
 
     while (!done) {
         struct packet p;
         struct PacketHeader h;
-        
+
         memset(&p, 0, sizeof(p));
         memset(&h, 0, sizeof(h));
         if (seq_num == -1) {
             // Send start packet
             create_packet(&p, 0, ran_num, 0, 0, "");
-            printf("%d %d \n",p.header.type,p.header.seqNum);
+            printf("%d %d \n", p.header.type, p.header.seqNum);
             if (send_packet(sockfd, &p, &addr) < 0) {
                 perror("Error sending packet");
                 return 0;
@@ -137,7 +158,7 @@ int main(int argc, char *argv[]) {
                     start_ack = 1;
                 }
                 else {
-                    printf("%d %d\n",h.type, h.seqNum);
+                    printf("%d %d\n", h.type, h.seqNum);
                     printf("Timeout waiting for start ack\n");
                     if (send_packet(sockfd, &p, &addr) < 0) {
                         perror("Error resending packet");
@@ -157,18 +178,17 @@ int main(int argc, char *argv[]) {
             buffer_len = fread(buffer, 1, DATA_SIZE, fp);
             if (buffer_len == 0) {
                 // End of file reached
-                if(cou > 0){
+                if (cou > 0) {
                     if (send_packets(sockfd, list, &addr, cou) < 0) {
                         perror("Error sending packet");
                         return 0;
                     }
-
                     send_ack = 0;
                     attempts = 0;
                     while (send_ack == 0 && attempts < max_attempts) {
                         if (recv_packet(sockfd, &h, &addr) >= 0 && h.type == 3) {
                             printf("Received ack %d\n", h.seqNum);
-                            if(max_ack < (int)h.seqNum) max_ack = h.seqNum;
+                            if (max_ack < (int)h.seqNum) max_ack = h.seqNum;
                             logging(log, h);
                             send_ack = 1;
                             seq_num = max_ack - 1;
@@ -198,7 +218,7 @@ int main(int argc, char *argv[]) {
                 logging(log, p.header);
                 printf("Sent end packet\n");
                 done = 1;
-                
+
                 end_ack = 0;
                 attempts = 0;
                 while (end_ack == 0 && attempts < max_attempts) {
@@ -237,7 +257,7 @@ int main(int argc, char *argv[]) {
 
                 cou++;
 
-                if(cou == windowsize){
+                if (cou == windowsize) {
 
                     if (send_packets(sockfd, list, &addr, windowsize) < 0) {
                         perror("Error sending packet");
@@ -249,7 +269,7 @@ int main(int argc, char *argv[]) {
                     while (send_ack == 0 && attempts < max_attempts) {
                         if (recv_packet(sockfd, &h, &addr) >= 0 && h.type == 3) {
                             printf("Received ack %d\n", h.seqNum);
-                            if(max_ack < (int)h.seqNum) max_ack = h.seqNum;
+                            if (max_ack < (int)h.seqNum) max_ack = h.seqNum;
                             logging(log, h);
                             send_ack = 1;
                             seq_num = max_ack - 1;
@@ -269,7 +289,7 @@ int main(int argc, char *argv[]) {
                     }
                     cou = 0;
                 }
-                
+
             }
         }
 

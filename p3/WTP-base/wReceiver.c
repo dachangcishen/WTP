@@ -48,14 +48,13 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize, 
 	printf("receiver file and log set\n");
 	int slen = sizeof(other_addr);
 	//setting packet message
-
 	struct PacketHeader *ack = (struct PacketHeader*)malloc(sizeof(struct PacketHeader));
 	char header[16] = { 0 };
 	char buffer[DATA_SIZE] = { 0 };
 	char* data_of_window = (char*)malloc(sizeof(char) * DATA_SIZE*windowsize);
 	memset(data_of_window, 0, DATA_SIZE * windowsize);
 
-	printf("message setted");
+	printf("message setted\n");
 
 	//start getting message
 	int cou = 0;
@@ -63,12 +62,11 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize, 
 	int ack_seq = 0;
 	int start_seq;
 	int cc = 0;
-
 	while (1) {
 		cc++;
 		memset((char*)ack, 0, sizeof(ack));
 		memset((char*)data_of_window, 0, DATA_SIZE*windowsize);
-		int rec = recvfrom(sockfd, (char*)data_of_window, DATA_SIZE*windowsize, 0, (struct sockaddr*)&other_addr, &slen);
+		int rec = recvfrom(sockfd, (char*)data_of_window, DATA_SIZE * windowsize, 0, (struct sockaddr*)&other_addr, &slen);	
 		if (rec > 0) {
 			char first_header[16] = { 0 };
 			for (int i = 0; i < 16; i++) {
@@ -127,7 +125,6 @@ int recive(int sockfd, struct sockaddr_in other_addr, int port, int windowsize, 
 					fseek(fd_output, head->seqNum * 1456, SEEK_SET);
 					fwrite(data, 1, head->length, fd_output);
 					cou++;
-					printf("%s", data);
 				}
 				ack_seq += cou;
 				ack->type = 3;
@@ -156,7 +153,6 @@ int main(int argc, const char** argv) {
 	strcpy(file, argv[3]);
 	char path[] = "";
 	strcat(path, file);
-	printf("%s\n",path);
 	char log[100];
 	strcpy(log, argv[4]);
 
